@@ -218,27 +218,40 @@ dfInputSelect view = do
 --------------------------------------------------------------------------------
 -- | Generate a number of radio buttons. Example:
 --
--- > <dfInputRadio ref="user.sex" />
+-- > <dfInputRadio ref="user.sex" >
+-- >   <dfInputRadio:button class="${dfInputRadio:choice}" /><dfInputRadio:Label />
+-- > </dfInputRadio>
+getParamAttrs :: Monad m => HeistT m [(Text, Text)]
+getParamAttrs = do
+  node <- getParamNode
+  return $ case node of
+             X.Element _ as _ -> as
+             _                -> []
+
+mergeWithNode :: Monad m => X.Node -> Splice m
+mergeWithNode (X.Element t as c) = do
+  as' <- getParamAttrs
+  return [X.Element t (addAttrs as' as) c]
+mergeWithNode n = return [n]
+
 dfInputRadio :: Monad m => View Text -> Splice m
 dfInputRadio view = do
-    (ref, attrs) <- getRefAttributes Nothing
-
-    let ref'     = absoluteRef ref view
-        choices  = fieldInputChoice ref view
-        children = concatMap makeOption choices
-        value i  = ref' `mappend` "." `mappend` i
-
-        makeOption (i, c, sel) =
-            [ X.Element "input"
-                (attr sel ("checked", "checked") $ addAttrs attrs
-                    [ ("type", "radio"), ("value", value i)
-                    , ("id", value i), ("name", ref')
-                    ]) []
-            , X.Element "label" [("for", value i)] [X.TextNode c]
-            ]
-
-    return children
-
+  (ref, _) <- getRefAttributes Nothing
+  let ref'     = absoluteRef ref view
+      choices  = fieldInputChoice ref view
+      value i  = ref' `mappend` "." `mappend` i
+      button (i, _, sel) =
+          X.Element "input"
+               (attr sel ("checked", "checked")
+                [ ("type", "radio"), ("value", value i)
+                , ("id", value i), ("name", ref')
+                ]) []
+      label (i, c, _) = X.Element "label" [("for", value i)] [X.TextNode c]
+      choiceSplice c = runChildrenWith [ ("dfInputRadio:button", mergeWithNode $ button c)
+                                       , ("dfInputRadio:label", mergeWithNode $ label c)
+                                       , ("dfInputRadio:choice", textSplice $ (\(_,a,_)->a) c)
+                                       ]
+  mapSplices choiceSplice choices
 
 --------------------------------------------------------------------------------
 -- | Generate a checkbox. Example:
